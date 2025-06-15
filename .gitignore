@@ -404,3 +404,6 @@ backend/models/saved_artifacts/*.pkl
 
 # OS files
 .DS_Store
+# Virtual environments
+backend/venv/
+venv/
