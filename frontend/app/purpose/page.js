@@ -11,7 +11,9 @@ export default function PurposePage() {
               <p>
                 The Sports Celebrity Classifier demonstrates a complete end-to-end machine learning pipeline for image recognition. 
                 This project showcases how advanced computer vision and AI can identify five world-renowned athletes: 
-                Cristiano Ronaldo, Lionel Messi, Steph Curry, Serena Williams, and Carlos Alcaraz.
+                Cristiano Ronaldo, Lionel Messi, Steph Curry, Serena Williams, and Carlos Alcaraz. Its important to note
+                that due to the limitation of images per celebrity(~150 preprocessing), the model will give wrong results.
+                I am currently working on scraping images to have a more robust dataset.
               </p>
             </section>
             
