@@ -196,8 +196,6 @@ dist
 # Serverless Webpack directories
 .webpack/
 
-# Optional stylelint cache
-
 # SvelteKit build / generate output
 .svelte-kit
 
@@ -384,26 +382,7 @@ pyrightconfig.json
 
 # Virtual environments
 backend/venv_311/
-venv*/
-env/
-ENV/
-
-# Node.js
-node_modules/
-.next/
-.cache/
-
-# Python cache
-__pycache__/
-*.pyc
-
-# Models and data
-*.pkl
-training_data/
-backend/models/saved_artifacts/*.pkl
-
-# OS files
-.DS_Store
-# Virtual environments
 backend/venv/
-venv/
+venv*/
+
+training_data/ 

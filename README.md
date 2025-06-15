@@ -51,7 +51,7 @@ A machine learning-powered web application that classifies images of sports cele
 
 - **Python 3.8+** (for backend)
 - **Node.js 16+** (for frontend)
-- **Required Python packages**: OpenCV, NumPy, Scikit-learn, Flask, etc.
+- **Training Data**: [Download from Google Drive](https://drive.google.com/drive/folders/1czcws7ydiXtfjYU-EhuoM8_lZucUIlm0?usp=sharing) (required only if training from scratch)
 
 ### Backend Setup
 
