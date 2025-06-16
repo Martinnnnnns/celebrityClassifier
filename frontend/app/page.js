@@ -32,7 +32,7 @@ export default function ClassifierPage() {
       const result = await response.json();
       
       if (!result || result.length === 0) {
-        throw new Error('No face detected in the image. Please try with a clearer image showing the person\'s face.');
+        throw new Error('No face detected in the image. Please try an image showing the face clearly.');
       }
 
       // Find the best match

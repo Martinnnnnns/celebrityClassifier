@@ -28,21 +28,21 @@ export default function AboutPage() {
               
               <div className="about-bio-content">
                 <p>
-                  I'm currently pursuing a Bachelor's degree in Computer Science at King's College London. 
+                  I&apos;m currently pursuing a Bachelor&apos;s degree in Computer Science at King&apos;s College London. 
                   My academic journey is driven by a deep interest in Artificial Intelligence and Machine Learning, 
                   where I explore how intelligent systems can solve real-world problems and create impactful solutions.
                 </p>
 
                 <p>
                   I have hands-on experience working with languages like Python, Java, and SQL, and enjoy building projects 
-                  that combine technical skills with creativity. I'm particularly drawn to Data Science, from extracting insights 
-                  from data to training predictive models, and I'm eager to pursue a professional career in AI and Data Science.
+                  that combine technical skills with creativity. I&apos;m particularly drawn to Data Science, from extracting insights 
+                  from data to training predictive models, and I&apos;m eager to pursue a professional career in AI and Data Science.
                 </p>
 
                 <p>
-                  Outside of the world of code, I'm an avid athlete with a passion for rock climbing and tennis. 
+                  Outside of the world of code, I&apos;m an avid athlete with a passion for rock climbing and tennis. 
                   Balancing sports and studies keeps me focused, curious, and always pushing forward. 
-                  I'm excited about contributing to the future of AI while continuing to grow as both a developer and a learner.
+                  I&apos;m excited about contributing to the future of AI while continuing to grow as both a developer and a learner.
                 </p>
               </div>
             </div>
@@ -92,7 +92,7 @@ export default function AboutPage() {
             <div className="about-education-list">
               <div className="about-education-item">
                 <h3 className="about-education-title">BSc in Computer Science</h3>
-                <p className="about-education-details">King's College London, 2023-2026</p>
+                <p className="about-education-details">King&apos;s College London, 2023-2026</p>
               </div>
               <div className="about-education-item">
                 <h3 className="about-education-title">Machine Learning Specialization</h3>
