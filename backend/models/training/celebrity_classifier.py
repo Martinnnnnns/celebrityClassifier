@@ -52,23 +52,15 @@ class WaveletTransform:
             numpy.ndarray: Wavelet transformed image emphasizing edges
         """
         img_array = img.copy()
-        
-        # Convert to grayscale if needed
         if len(img_array.shape) == 3:
             img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        
-        # Convert to float and normalize
         img_array = np.float32(img_array)
         img_array /= 255.0
         
-        # Compute wavelet coefficients
         coeffs = pywt.wavedec2(img_array, mode, level=level)
-        
-        # Process coefficients - zero out approximation to emphasize details
         coeffs_h = list(coeffs)
         coeffs_h[0] *= 0
         
-        # Reconstruct image
         img_array_h = pywt.waverec2(coeffs_h, mode)
         img_array_h *= 255
         img_array_h = np.uint8(img_array_h)
@@ -118,20 +110,17 @@ class SportsCelebrityClassifier:
         self.data_cleaner = ImageDataCleaner(dataset_path, cropped_path)
         self.wavelet = WaveletTransform()
         
-        # Celebrity mapping
         self.celebrities = [
             'cristiano_ronaldo', 'lionel_messi', 'steph_curry', 
             'serena_williams', 'carlos_alcaraz'
         ]
         
-        # Initialize variables
         self.X = None
         self.y = None
         self.class_dict = {}
         self.best_model = None
         self.celebrity_file_names_dict = {}
         
-        # OpenCV cascades
         self.face_cascade = cv2.CascadeClassifier('../../resources/opencv/haarcascades/haarcascade_frontalface_default.xml')
         self.eye_cascade = cv2.CascadeClassifier('../../resources/opencv/haarcascades/haarcascade_eye.xml')
     
@@ -153,11 +142,8 @@ class SportsCelebrityClassifier:
         print(f"Detection method: {detection_method}")
         print()
         
-        # Process and crop images
         cropped_dirs, celebrity_files = self.data_cleaner.process_all_images(detection_method=detection_method)
         self.celebrity_file_names_dict = celebrity_files
-        
-        # Create class dictionary
         self.class_dict = {name: idx for idx, name in enumerate(self.celebrity_file_names_dict.keys())}
         
         print(f"\nClass mapping: {self.class_dict}")
@@ -178,7 +164,6 @@ class SportsCelebrityClassifier:
                         file_list.append(file_entry.path)
                 self.celebrity_file_names_dict[celebrity_name] = file_list
         
-        # Create class dictionary
         self.class_dict = {name: idx for idx, name in enumerate(self.celebrity_file_names_dict.keys())}
         print(f"Loaded dataset with classes: {self.class_dict}")
     
@@ -203,19 +188,14 @@ class SportsCelebrityClassifier:
             
             for training_image in training_files:
                 try:
-                    # Load and resize image
                     img = cv2.imread(training_image)
                     if img is None:
                         continue
-                    
-                    # Resize raw image
                     scaled_raw_img = cv2.resize(img, image_size)
                     
-                    # Apply wavelet transform and resize
                     img_wavelet = self.wavelet.w2d(img, 'db1', 5)
                     scaled_img_wavelet = cv2.resize(img_wavelet, image_size)
                     
-                    # Combine features: raw RGB + wavelet grayscale
                     raw_features = scaled_raw_img.reshape(image_size[0] * image_size[1] * 3, 1)
                     wavelet_features = scaled_img_wavelet.reshape(image_size[0] * image_size[1], 1)
                     combined_features = np.vstack((raw_features, wavelet_features))
@@ -228,7 +208,6 @@ class SportsCelebrityClassifier:
                     print(f"Error processing {training_image}: {e}")
                     continue
         
-        # Convert to numpy arrays
         feature_length = image_size[0] * image_size[1] * 3 + image_size[0] * image_size[1]
         self.X = np.array(X).reshape(len(X), feature_length).astype(float)
         self.y = np.array(y)
@@ -253,7 +232,6 @@ class SportsCelebrityClassifier:
         print("TRAINING AND COMPARING MODELS")
         print("="*60)
         
-        # Split data
         X_train, X_test, y_train, y_test = train_test_split(
             self.X, self.y, test_size=test_size, random_state=random_state
         )
@@ -261,7 +239,6 @@ class SportsCelebrityClassifier:
         print(f"Training set: {X_train.shape[0]} samples")
         print(f"Test set: {X_test.shape[0]} samples")
         
-        # Define model parameters for grid search
         model_params = {
             'svm': {
                 'model': SVC(gamma='auto', probability=True),
@@ -284,21 +261,17 @@ class SportsCelebrityClassifier:
             }
         }
         
-        # Train and evaluate models
         scores = []
         best_estimators = {}
         
         for algo, mp in model_params.items():
             print(f"\nTraining {algo}...")
-            
-            # Create pipeline with scaling
+
             pipe = make_pipeline(StandardScaler(), mp['model'])
             
-            # Grid search with cross-validation
             clf = GridSearchCV(pipe, mp['params'], cv=5, return_train_score=False)
             clf.fit(X_train, y_train)
             
-            # Store results
             scores.append({
                 'model': algo,
                 'best_score': clf.best_score_,
@@ -311,21 +284,18 @@ class SportsCelebrityClassifier:
             print(f"Test score: {clf.best_estimator_.score(X_test, y_test):.4f}")
             print(f"Best params: {clf.best_params_}")
         
-        # Create results DataFrame
         results_df = pd.DataFrame(scores)
         print("\n" + "="*60)
         print("MODEL COMPARISON RESULTS")
         print("="*60)
         print(results_df.to_string(index=False))
         
-        # Select best model based on test score
         best_model_name = results_df.loc[results_df['test_score'].idxmax(), 'model']
         self.best_model = best_estimators[best_model_name]
         
         print(f"\nBest performing model: {best_model_name}")
         print(f"Test accuracy: {results_df['test_score'].max():.4f}")
         
-        # Detailed evaluation of best model
         self._evaluate_model(X_test, y_test)
         
         return {
@@ -347,15 +317,12 @@ class SportsCelebrityClassifier:
         print("DETAILED MODEL EVALUATION")
         print("="*60)
         
-        # Predictions
         y_pred = self.best_model.predict(X_test)
         
-        # Classification report
         target_names = list(self.class_dict.keys())
         print("Classification Report:")
         print(classification_report(y_test, y_pred, target_names=target_names))
         
-        # Confusion matrix
         cm = confusion_matrix(y_test, y_pred)
         
         plt.figure(figsize=(10, 8))
@@ -380,11 +347,9 @@ class SportsCelebrityClassifier:
         if self.best_model is None:
             raise ValueError("No model trained yet. Run train_and_compare_models() first.")
         
-        # Save model
         joblib.dump(self.best_model, model_path)
         print(f"Model saved to: {model_path}")
         
-        # Save class dictionary
         with open(class_dict_path, 'w') as f:
             json.dump(self.class_dict, f, indent=2)
         print(f"Class dictionary saved to: {class_dict_path}")
@@ -397,11 +362,9 @@ class SportsCelebrityClassifier:
             model_path (str): Path to the saved model
             class_dict_path (str): Path to the class dictionary
         """
-        # Load model
         self.best_model = joblib.load(model_path)
         print(f"Model loaded from: {model_path}")
         
-        # Load class dictionary
         with open(class_dict_path, 'r') as f:
             self.class_dict = json.load(f)
         print(f"Class dictionary loaded from: {class_dict_path}")
@@ -419,27 +382,21 @@ class SportsCelebrityClassifier:
         """
         if self.best_model is None:
             raise ValueError("No model loaded. Train a model or load an existing one.")
-        
-        # Get cropped face image using flexible detection
+
         cropped_img = self.data_cleaner.get_cropped_image_with_eye_validation(image_path)
-        
         if cropped_img is None:
             return "No face detected"
         
-        # Create feature vector
         scaled_raw_img = cv2.resize(cropped_img, (32, 32))
         img_wavelet = self.wavelet.w2d(cropped_img, 'db1', 5)
         scaled_img_wavelet = cv2.resize(img_wavelet, (32, 32))
         
-        # Combine features
         raw_features = scaled_raw_img.reshape(32 * 32 * 3, 1)
         wavelet_features = scaled_img_wavelet.reshape(32 * 32, 1)
         combined_features = np.vstack((raw_features, wavelet_features))
         
-        # Reshape for prediction
         feature_vector = combined_features.reshape(1, -1).astype(float)
         
-        # Make prediction
         prediction = self.best_model.predict(feature_vector)[0]
         celebrity_name = list(self.class_dict.keys())[list(self.class_dict.values()).index(prediction)]
         
@@ -457,37 +414,29 @@ class SportsCelebrityClassifier:
         Args:
             sample_image_path (str): Path to a sample image
         """
-        print("Demonstrating preprocessing pipeline...")
-        
-        # Load original image
+        print("Demonstrating preprocessing pipeline...")      
         original_img = cv2.imread(sample_image_path)
         if original_img is None:
             print(f"Could not load image: {sample_image_path}")
             return
         
-        # Get cropped face
         cropped_img = self.data_cleaner.get_cropped_image_with_eye_validation(sample_image_path)
         
         if cropped_img is None:
             print("No valid face detected in the image")
             return
         
-        # Show preprocessing steps
         plt.figure(figsize=(15, 5))
-        
-        # Original image
         plt.subplot(1, 3, 1)
         plt.imshow(cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB))
         plt.title('Original Image')
         plt.axis('off')
         
-        # Cropped face
         plt.subplot(1, 3, 2)
         plt.imshow(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
         plt.title('Cropped Face (Flexible Detection)')
         plt.axis('off')
         
-        # Wavelet transform
         plt.subplot(1, 3, 3)
         wavelet_img = self.wavelet.w2d(cropped_img, 'db1', 5)
         plt.imshow(wavelet_img, cmap='gray')
@@ -503,11 +452,8 @@ def main():
     print("Sports Celebrity Image Classification")
     print("Celebrities: Cristiano Ronaldo, Lionel Messi, Steph Curry, Serena Williams, Carlos Alcaraz")
     print()
-    
-    # Initialize classifier
     classifier = SportsCelebrityClassifier()
     
-    # Prepare dataset (or load existing)
     try:
         classifier.load_existing_dataset()
         print("Loaded existing processed dataset")
@@ -515,13 +461,8 @@ def main():
         print("Processing raw dataset...")
         classifier.prepare_dataset()
     
-    # Create feature vectors
     X, y = classifier.create_feature_vectors()
-    
-    # Train and compare models
     results = classifier.train_and_compare_models()
-    
-    # Save the best model
     classifier.save_model()
     
     print("\n" + "="*60)

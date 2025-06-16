@@ -30,7 +30,6 @@ class ImageDataCleaner:
         self.dataset_path = dataset_path
         self.cropped_path = cropped_path
         
-        # Initialize OpenCV cascade classifiers for face and eye detection
         self.face_cascade = cv2.CascadeClassifier('../../resources/opencv/haarcascades/haarcascade_frontalface_default.xml')
         self.eye_cascade = cv2.CascadeClassifier('../../resources/opencv/haarcascades/haarcascade_eye.xml')
     
@@ -68,7 +67,6 @@ class ImageDataCleaner:
             largest_face_idx = np.argmax(areas)
             x, y, w, h = faces[largest_face_idx]
             
-            # Add some padding around the face (10% on each side)
             padding = int(0.1 * min(w, h))
             x_start = max(0, x - padding)
             y_start = max(0, y - padding)
@@ -106,7 +104,6 @@ class ImageDataCleaner:
             roi_color = img[y:y+h, x:x+w]
             eyes = self.eye_cascade.detectMultiScale(roi_gray)
             
-            # Only return face if 2 or more eyes are detected
             if len(eyes) >= 2:
                 return roi_color
         
@@ -215,20 +212,17 @@ class ImageDataCleaner:
         Returns:
             tuple: (list of cropped directories, dict of celebrity file names)
         """
-        # Get all celebrity directories
         img_dirs = self.get_image_directories()
         print(f"Found celebrity directories: {[d.split('/')[-1] for d in img_dirs]}")
         print(f"Using detection method: {detection_method}")
         
-        # Setup output directory
         self.setup_cropped_directory()
-        
-        # Select detection method
+
         if detection_method == 'strict':
             detection_func = self.get_cropped_image_if_2_eyes
         elif detection_method == 'face_only':
             detection_func = self.get_cropped_image_if_face_detected
-        else:  # flexible
+        else:  
             detection_func = self.get_cropped_image_with_eye_validation
         
         cropped_image_dirs = []
@@ -244,20 +238,17 @@ class ImageDataCleaner:
             
             celebrity_file_names_dict[celebrity_name] = []
             
-            # Process each image in the celebrity directory
             for entry in os.scandir(img_dir):
                 if entry.is_file() and entry.name.lower().endswith(('.png', '.jpg', '.jpeg')):
                     roi_color = detection_func(entry.path)
                     
                     if roi_color is not None:
-                        # Create celebrity folder in cropped directory
                         cropped_folder = os.path.join(self.cropped_path, celebrity_name)
                         if not os.path.exists(cropped_folder):
                             os.makedirs(cropped_folder)
                             cropped_image_dirs.append(cropped_folder)
                             print(f"Created cropped images folder: {cropped_folder}")
                         
-                        # Save cropped image
                         cropped_file_name = f"{celebrity_name}{count}.png"
                         cropped_file_path = os.path.join(cropped_folder, cropped_file_name)
                         
@@ -309,16 +300,9 @@ def main():
     print("  'face_only' - Just face detection, no eye requirement")  
     print("  'strict' - Original method (2+ eyes required)")
     
-    # Initialize the data cleaner
     cleaner = ImageDataCleaner()
-    
-    # Use flexible detection method for best results
-    detection_method = 'flexible'  # Change this to 'face_only' or 'strict' if needed
-    
-    # Process all images
+    detection_method = 'flexible' 
     cropped_dirs, celebrity_files = cleaner.process_all_images(detection_method=detection_method)
-    
-    # Show processing statistics
     cleaner.get_processing_stats(celebrity_files)
     
     print(f"\nData cleaning completed successfully using '{detection_method}' method!")

@@ -60,8 +60,6 @@ export default function ClassifierPage() {
     setClassificationResult(null);
     setError(null);
   }, []);
-
-  // Determine if we should show results layout (2-column) or centered layout (1-column)
   const showResultsLayout = classificationResult || isLoading || error;
 
   return (
@@ -81,7 +79,7 @@ export default function ClassifierPage() {
             />
           </div>
 
-          {/* Results section - only show when we have results/loading/error */}
+          {/* Results section */}
           {showResultsLayout && (
             <div className="results-section-container">
               {error && (

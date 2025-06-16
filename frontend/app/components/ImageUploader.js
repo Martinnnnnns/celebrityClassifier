@@ -18,7 +18,6 @@ export default function ImageUploader({ onImageSelect, onClear, isLoading }) {
         const fileSizeMB = file.size / (1024 * 1024);
         let { width, height } = img;
 
-        // Progressive dimension reduction based on file size
         let maxDimension = 800;
         if (fileSizeMB > 4) maxDimension = 600;
         if (fileSizeMB > 6) maxDimension = 500;
@@ -57,7 +56,6 @@ export default function ImageUploader({ onImageSelect, onClear, isLoading }) {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    // Check file size
     const fileSizeMB = file.size / (1024 * 1024);
     if (fileSizeMB > 8) {
       alert('Image file is too large. Please use an image smaller than 8MB.');
@@ -66,20 +64,17 @@ export default function ImageUploader({ onImageSelect, onClear, isLoading }) {
 
     setSelectedFile(file);
     
-    // Create preview
     const previewUrl = URL.createObjectURL(file);
     setPreview(previewUrl);
 
-    // Compress and store the data URL, but DON'T trigger classification yet
     try {
       const compressedDataUrl = await compressImage(file);
       setCompressedDataUrl(compressedDataUrl);
-      // Remove this line: onImageSelect(compressedDataUrl);
     } catch (error) {
       console.error('Error processing image:', error);
       alert('Error processing image. Please try again.');
     }
-  }, [compressImage]); // Remove onImageSelect from dependencies
+  }, [compressImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

@@ -25,7 +25,6 @@ export default function ClassificationResults({ result }) {
   const classDictionary = result.class_dictionary;
   const probabilities = result.class_probability;
 
-  // Create probability data for table
   const probabilityData = Object.entries(classDictionary).map(([name, index]) => ({
     name: celebrityNames[name] || name,
     key: name,
@@ -67,7 +66,7 @@ export default function ClassificationResults({ result }) {
           </thead>
           <tbody>
             {probabilityData
-              .sort((a, b) => b.probability - a.probability) // Sort by probability descending
+              .sort((a, b) => b.probability - a.probability) 
               .map((item) => (
                 <tr 
                   key={item.key} 

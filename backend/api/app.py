@@ -2,23 +2,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import image_utils
 import os
+import werkzeug.formparser
 
 app = Flask(__name__)
 
-# Enable CORS for Next.js frontend
 CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
-
-# Increase Flask limits
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB
-
-# CRITICAL: Set Werkzeug's form data limit
-import werkzeug.formparser
-werkzeug.formparser.max_form_memory_size = 16 * 1024 * 1024  # 16MB for form data
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  
+werkzeug.formparser.max_form_memory_size = 16 * 1024 * 1024  
 
 @app.route('/api/classify_image', methods=['POST', 'OPTIONS'])
 def classify_image():
     if request.method == 'OPTIONS':
-        # Handle preflight request
         response = jsonify({})
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
@@ -47,9 +41,7 @@ def classify_image():
         
         print("Image data length:", len(image_data))
         
-        # Calculate actual image size from base64
         if image_data.startswith('data:'):
-            # Remove data URL prefix
             header, encoded = image_data.split(',', 1)
             actual_size_bytes = len(encoded) * 3 // 4
         else:
@@ -91,7 +83,6 @@ def classify_image():
                 ]
             }), 400
         
-        # Add success information to response
         for i, res in enumerate(valid_results):
             res['detection_info'] = {
                 'method': 'flexible_detection',
@@ -163,7 +154,6 @@ def classify_image():
                 ]
             }), 500
 
-# Handle file too large error at the Flask level
 @app.errorhandler(413)
 def too_large(e):
     print("=== 413 error handler triggered ===")
@@ -178,7 +168,6 @@ def too_large(e):
         ]
     }), 413
 
-# Add request size debugging
 @app.before_request
 def log_request_info():
     if request.endpoint == 'classify_image' and request.method == 'POST':
@@ -186,12 +175,10 @@ def log_request_info():
         print(f"Content-Length header: {request.headers.get('Content-Length', 'Not set')}")
         print(f"Content-Type header: {request.headers.get('Content-Type', 'Not set')}")
 
-# Add a health check endpoint
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint to verify the service is running"""
     try:
-        # Check if model is loaded
         if image_utils.__model is None:
             return jsonify({
                 "status": "unhealthy", 
@@ -210,7 +197,6 @@ def health_check():
             "message": f"Health check failed: {str(e)}"
         }), 500
 
-# Add an endpoint to get available celebrities
 @app.route('/api/celebrities', methods=['GET'])
 def get_celebrities():
     """Get list of celebrities that can be classified"""

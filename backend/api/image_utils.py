@@ -21,13 +21,11 @@ def classify_image(image_base64_data, file_path=None):
     Returns:
         list: Classification results with probabilities
     """
-    # Use flexible face detection (matching the improved data cleaning logic)
     imgs = get_cropped_image_flexible(file_path, image_base64_data)
 
     result = []
     for img in imgs:
         try:
-            # Resize and process image (same as training pipeline)
             scalled_raw_img = cv2.resize(img, (32, 32))
             img_har = w2d(img, 'db1', 5)
             scalled_img_har = cv2.resize(img_har, (32, 32))
@@ -37,7 +35,6 @@ def classify_image(image_base64_data, file_path=None):
 
             final = combined_img.reshape(1, len_image_array).astype(float)
             
-            # Make prediction
             prediction = __model.predict(final)[0]
             probabilities = __model.predict_proba(final)[0]
             
@@ -119,7 +116,6 @@ def get_cropped_image_flexible(image_path, image_base64_data):
     face_cascade = cv2.CascadeClassifier('../resources/opencv/haarcascades/haarcascade_frontalface_default.xml')
     eye_cascade = cv2.CascadeClassifier('../resources/opencv/haarcascades/haarcascade_eye.xml')
 
-    # Load image from file or base64
     if image_path:
         img = cv2.imread(image_path)
     else:
@@ -144,7 +140,6 @@ def get_cropped_image_flexible(image_path, image_base64_data):
         eyes = eye_cascade.detectMultiScale(roi_gray)
         print(f"  Face at ({x},{y},{w},{h}) has {len(eyes)} eyes")
         if len(eyes) >= 2:
-            # Add padding around face
             padding = int(0.1 * min(w, h))
             x_start = max(0, x - padding)
             y_start = max(0, y - padding)
@@ -164,7 +159,6 @@ def get_cropped_image_flexible(image_path, image_base64_data):
         roi_color = img[y:y+h, x:x+w]
         eyes = eye_cascade.detectMultiScale(roi_gray)
         if len(eyes) >= 1:
-            # Add padding around face
             padding = int(0.1 * min(w, h))
             x_start = max(0, x - padding)
             y_start = max(0, y - padding)
@@ -186,7 +180,6 @@ def get_cropped_image_flexible(image_path, image_base64_data):
         roi_gray = gray[y:y+h, x:x+w]
         eyes = eye_cascade.detectMultiScale(roi_gray)
         if len(eyes) >= 1:
-            # Add padding around face
             padding = int(0.1 * min(w, h))
             x_start = max(0, x - padding)
             y_start = max(0, y - padding)
@@ -212,7 +205,6 @@ def get_cropped_image_flexible(image_path, image_base64_data):
         
         # Basic quality check
         if w > 30 and h > 30:
-            # Add padding around face
             padding = int(0.1 * min(w, h))
             x_start = max(0, x - padding)
             y_start = max(0, y - padding)
