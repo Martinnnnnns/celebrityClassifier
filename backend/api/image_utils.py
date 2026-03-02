@@ -1,274 +1,517 @@
+"""
+Refactored Image Utilities for Celebrity Classification
+
+This module provides improved image processing functionality with:
+- Centralized configuration
+- Input validation
+- Type hints
+- Better error handling
+- Cleaner code structure
+"""
+
 import joblib
 import json
 import numpy as np
 import base64
 import cv2
+from typing import List, Dict, Optional, Tuple, Any
 from wavelet_transform import w2d
+import config
+import os
 
-__class_name_to_number = {}
-__class_number_to_name = {}
+# ============================================================================
+# MODULE-LEVEL STATE
+# ============================================================================
 
-__model = None
+__class_name_to_number: Dict[str, int] = {}
+__class_number_to_name: Dict[int, str] = {}
+__model: Optional[Any] = None
 
-def classify_image(image_base64_data, file_path=None):
+
+# ============================================================================
+# VALIDATION FUNCTIONS
+# ============================================================================
+
+def validate_image(img: np.ndarray) -> Tuple[bool, Optional[str]]:
     """
-    Classify sports celebrity from image using flexible face detection.
-    
+    Validate image for processing.
+
     Args:
-        image_base64_data (str): Base64 encoded image data
-        file_path (str): Optional file path for image
-        
+        img: Input image array
+
     Returns:
-        list: Classification results with probabilities
+        Tuple of (is_valid, error_message)
     """
-    imgs = get_cropped_image_flexible(file_path, image_base64_data)
+    if img is None:
+        return False, "Image is None"
 
-    result = []
-    for img in imgs:
-        try:
-            scalled_raw_img = cv2.resize(img, (32, 32))
-            img_har = w2d(img, 'db1', 5)
-            scalled_img_har = cv2.resize(img_har, (32, 32))
-            combined_img = np.vstack((scalled_raw_img.reshape(32 * 32 * 3, 1), scalled_img_har.reshape(32 * 32, 1)))
+    if not isinstance(img, np.ndarray):
+        return False, "Image is not a numpy array"
 
-            len_image_array = 32*32*3 + 32*32
+    if img.size == 0:
+        return False, "Image is empty"
 
-            final = combined_img.reshape(1, len_image_array).astype(float)
-            
-            prediction = __model.predict(final)[0]
-            probabilities = __model.predict_proba(final)[0]
-            
-            result.append({
-                'class': class_number_to_name(prediction),
-                'class_probability': np.around(probabilities*100, 2).tolist(),
-                'class_dictionary': __class_name_to_number
-            })
-            
-        except Exception as e:
-            print(f"Error processing face crop: {e}")
-            continue
+    # Check dimensions
+    if len(img.shape) < 2:
+        return False, "Image has invalid dimensions"
 
-    return result
+    height, width = img.shape[:2]
 
-def class_number_to_name(class_num):
-    """Convert class number to celebrity name."""
-    return __class_number_to_name[class_num]
+    # Check if too small
+    if height < config.MIN_FACE_SIZE[1] or width < config.MIN_FACE_SIZE[0]:
+        return False, f"Image too small (min: {config.MIN_FACE_SIZE})"
 
-def load_saved_artifacts():
-    """Load saved model and class dictionary."""
-    print("loading saved artifacts...start")
-    global __class_name_to_number
-    global __class_number_to_name
+    # Check if too large
+    if height > config.MAX_IMAGE_HEIGHT or width > config.MAX_IMAGE_WIDTH:
+        return False, f"Image too large (max: {config.MAX_IMAGE_WIDTH}x{config.MAX_IMAGE_HEIGHT})"
 
-    class_dict_path = "../models/saved_artifacts/class_dictionary.json"
-    model_path = "../models/saved_artifacts/saved_model.pkl"
-    
-    try:
-        with open(class_dict_path, "r") as f:
-            __class_name_to_number = json.load(f)
-            __class_number_to_name = {v:k for k,v in __class_name_to_number.items()}
-        print(f"✓ Class dictionary loaded from: {class_dict_path}")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Class dictionary not found at: {class_dict_path}")
+    # Check color channels
+    if len(img.shape) == 3 and img.shape[2] not in [3, 4]:
+        return False, f"Unsupported number of color channels: {img.shape[2]}"
 
-    global __model
-    if __model is None:
-        try:
-            with open(model_path, 'rb') as f:
-                __model = joblib.load(f)
-            print(f"✓ Model loaded from: {model_path}")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Model not found at: {model_path}")
-    
-    print("loading saved artifacts...done")
+    return True, None
 
-def get_cv2_image_from_base64_string(b64str):
+
+def validate_face_crop(face: np.ndarray) -> bool:
     """
-    Convert base64 string to OpenCV image.
-    
+    Validate a cropped face region.
+
     Args:
-        b64str (str): Base64 encoded image string
-        
+        face: Cropped face image
+
     Returns:
-        numpy.ndarray: OpenCV image array
+        True if valid, False otherwise
+    """
+    if face is None or face.size == 0:
+        return False
+
+    height, width = face.shape[:2]
+
+    return (height >= config.MIN_FACE_SIZE[1] and
+            width >= config.MIN_FACE_SIZE[0])
+
+
+# ============================================================================
+# IMAGE DECODING
+# ============================================================================
+
+def decode_base64_image(b64str: str) -> Optional[np.ndarray]:
+    """
+    Convert base64 string to OpenCV image with validation.
+
+    Args:
+        b64str: Base64 encoded image string (with or without data URI prefix)
+
+    Returns:
+        OpenCV image array or None if decoding fails
     """
     try:
-        encoded_data = b64str.split(',')[1]
-        nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
+        # Remove data URI prefix if present
+        if ',' in b64str:
+            encoded_data = b64str.split(',', 1)[1]
+        else:
+            encoded_data = b64str
+
+        # Decode base64 to bytes
+        img_bytes = base64.b64decode(encoded_data)
+
+        # Convert to numpy array
+        nparr = np.frombuffer(img_bytes, np.uint8)
+
+        # Decode to image
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        # Validate decoded image
+        is_valid, error_msg = validate_image(img)
+        if not is_valid:
+            print(f"Image validation failed: {error_msg}")
+            return None
+
         return img
+
+    except base64.binascii.Error as e:
+        print(f"Base64 decoding error: {e}")
+        return None
     except Exception as e:
-        print(f"Error decoding base64 image: {e}")
+        print(f"Error decoding image: {e}")
         return None
 
-def get_cropped_image_flexible(image_path, image_base64_data):
+
+# ============================================================================
+# FACE DETECTION
+# ============================================================================
+
+def detect_faces_with_strategy(
+    gray: np.ndarray,
+    face_cascade: cv2.CascadeClassifier,
+    eye_cascade: cv2.CascadeClassifier,
+    img: np.ndarray
+) -> List[np.ndarray]:
     """
-    Flexible face detection method that matches the improved data cleaning logic.
-    Uses multiple strategies to maximize face detection success rate.
-    
+    Detect faces using multiple fallback strategies.
+
+    Strategy 1: Standard detection with 2+ eyes (highest quality)
+    Strategy 2: Standard detection with 1+ eye (medium quality)
+    Strategy 3: Lenient detection with 1+ eye (lower quality)
+    Strategy 4: Very lenient detection, largest face (lowest quality)
+
     Args:
-        image_path (str): Path to image file (optional)
-        image_base64_data (str): Base64 encoded image data (optional)
-        
+        gray: Grayscale image
+        face_cascade: Face detection cascade
+        eye_cascade: Eye detection cascade
+        img: Original color image
+
     Returns:
-        list: List of cropped face images
+        List of cropped face images
     """
-    face_cascade = cv2.CascadeClassifier('../resources/opencv/haarcascades/haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier('../resources/opencv/haarcascades/haarcascade_eye.xml')
-
-    if image_path:
-        img = cv2.imread(image_path)
-    else:
-        img = get_cv2_image_from_base64_string(image_base64_data)
-
-    if img is None:
-        print("ERROR: Could not load image")
-        return []
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     cropped_faces = []
-    
-    print("Starting flexible face detection...")
-    
-    # Strategy 1: Try to find faces with 2+ eyes (highest quality)
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    print(f"Strategy 1 - Standard detection (2+ eyes): Found {len(faces)} faces")
-    
-    for (x, y, w, h) in faces:
-        roi_gray = gray[y:y+h, x:x+w]
-        roi_color = img[y:y+h, x:x+w]
-        eyes = eye_cascade.detectMultiScale(roi_gray)
-        print(f"  Face at ({x},{y},{w},{h}) has {len(eyes)} eyes")
-        if len(eyes) >= 2:
-            padding = int(0.1 * min(w, h))
-            x_start = max(0, x - padding)
-            y_start = max(0, y - padding)
-            x_end = min(img.shape[1], x + w + padding)
-            y_end = min(img.shape[0], y + h + padding)
-            padded_face = img[y_start:y_end, x_start:x_end]
-            cropped_faces.append(padded_face)
-    
-    if cropped_faces:
-        print(f"SUCCESS: Found {len(cropped_faces)} high-quality faces (2+ eyes)")
-        return cropped_faces
-    
-    # Strategy 2: Try to find faces with 1+ eyes (medium quality)
-    print("Strategy 2 - Relaxed eye requirement (1+ eye)")
-    for (x, y, w, h) in faces:
-        roi_gray = gray[y:y+h, x:x+w]
-        roi_color = img[y:y+h, x:x+w]
-        eyes = eye_cascade.detectMultiScale(roi_gray)
-        if len(eyes) >= 1:
-            padding = int(0.1 * min(w, h))
-            x_start = max(0, x - padding)
-            y_start = max(0, y - padding)
-            x_end = min(img.shape[1], x + w + padding)
-            y_end = min(img.shape[0], y + h + padding)
-            padded_face = img[y_start:y_end, x_start:x_end]
-            cropped_faces.append(padded_face)
-    
-    if cropped_faces:
-        print(f"SUCCESS: Found {len(cropped_faces)} medium-quality faces (1+ eye)")
-        return cropped_faces
-    
-    # Strategy 3: More lenient face detection parameters
-    print("Strategy 3 - More lenient face detection")
-    faces = face_cascade.detectMultiScale(gray, 1.1, 3)
-    print(f"  Lenient detection: Found {len(faces)} faces")
-    
+
+    if config.VERBOSE_LOGGING:
+        print("Starting flexible face detection...")
+
+    # Strategy 1: Standard detection with 2+ eyes (highest quality)
+    faces = face_cascade.detectMultiScale(
+        gray,
+        **config.DETECTION_PARAMS_STANDARD
+    )
+
+    if config.VERBOSE_LOGGING:
+        print(f"Strategy 1 - Standard detection: Found {len(faces)} faces")
+
     for (x, y, w, h) in faces:
         roi_gray = gray[y:y+h, x:x+w]
         eyes = eye_cascade.detectMultiScale(roi_gray)
-        if len(eyes) >= 1:
-            padding = int(0.1 * min(w, h))
-            x_start = max(0, x - padding)
-            y_start = max(0, y - padding)
-            x_end = min(img.shape[1], x + w + padding)
-            y_end = min(img.shape[0], y + h + padding)
-            padded_face = img[y_start:y_end, x_start:x_end]
-            cropped_faces.append(padded_face)
-    
+
+        if config.VERBOSE_LOGGING:
+            print(f"  Face at ({x},{y},{w},{h}) has {len(eyes)} eyes")
+
+        if len(eyes) >= config.MIN_EYES_HIGH_QUALITY:
+            cropped_face = extract_face_with_padding(img, x, y, w, h)
+            if validate_face_crop(cropped_face):
+                cropped_faces.append(cropped_face)
+
     if cropped_faces:
-        print(f"SUCCESS: Found {len(cropped_faces)} faces with lenient detection")
+        if config.VERBOSE_LOGGING:
+            print(f"SUCCESS: Found {len(cropped_faces)} high-quality faces (2+ eyes)")
         return cropped_faces
-    
-    # Strategy 4: Even more lenient face detection
-    print("Strategy 4 - Very lenient face detection")
-    faces = face_cascade.detectMultiScale(gray, 1.05, 2)
-    print(f"  Very lenient detection: Found {len(faces)} faces")
-    
+
+    # Strategy 2: Standard detection with 1+ eye (medium quality)
+    if config.VERBOSE_LOGGING:
+        print("Strategy 2 - Relaxed eye requirement (1+ eye)")
+
+    for (x, y, w, h) in faces:
+        roi_gray = gray[y:y+h, x:x+w]
+        eyes = eye_cascade.detectMultiScale(roi_gray)
+
+        if len(eyes) >= config.MIN_EYES_MEDIUM_QUALITY:
+            cropped_face = extract_face_with_padding(img, x, y, w, h)
+            if validate_face_crop(cropped_face):
+                cropped_faces.append(cropped_face)
+
+    if cropped_faces:
+        if config.VERBOSE_LOGGING:
+            print(f"SUCCESS: Found {len(cropped_faces)} medium-quality faces (1+ eye)")
+        return cropped_faces
+
+    # Strategy 3: Lenient detection with 1+ eye
+    if config.VERBOSE_LOGGING:
+        print("Strategy 3 - Lenient face detection")
+
+    faces = face_cascade.detectMultiScale(
+        gray,
+        **config.DETECTION_PARAMS_LENIENT
+    )
+
+    if config.VERBOSE_LOGGING:
+        print(f"  Lenient detection: Found {len(faces)} faces")
+
+    for (x, y, w, h) in faces:
+        roi_gray = gray[y:y+h, x:x+w]
+        eyes = eye_cascade.detectMultiScale(roi_gray)
+
+        if len(eyes) >= config.MIN_EYES_MEDIUM_QUALITY:
+            cropped_face = extract_face_with_padding(img, x, y, w, h)
+            if validate_face_crop(cropped_face):
+                cropped_faces.append(cropped_face)
+
+    if cropped_faces:
+        if config.VERBOSE_LOGGING:
+            print(f"SUCCESS: Found {len(cropped_faces)} faces with lenient detection")
+        return cropped_faces
+
+    # Strategy 4: Very lenient detection, largest face
+    if config.VERBOSE_LOGGING:
+        print("Strategy 4 - Very lenient face detection")
+
+    faces = face_cascade.detectMultiScale(
+        gray,
+        **config.DETECTION_PARAMS_VERY_LENIENT
+    )
+
+    if config.VERBOSE_LOGGING:
+        print(f"  Very lenient detection: Found {len(faces)} faces")
+
     if len(faces) > 0:
         # Take the largest face (most likely to be the main subject)
         areas = [w * h for (x, y, w, h) in faces]
         largest_face_idx = np.argmax(areas)
         x, y, w, h = faces[largest_face_idx]
-        
-        # Basic quality check
-        if w > 30 and h > 30:
-            padding = int(0.1 * min(w, h))
-            x_start = max(0, x - padding)
-            y_start = max(0, y - padding)
-            x_end = min(img.shape[1], x + w + padding)
-            y_end = min(img.shape[0], y + h + padding)
-            padded_face = img[y_start:y_end, x_start:x_end]
-            cropped_faces.append(padded_face)
-            print(f"SUCCESS: Using largest face (no eye requirement)")
-            return cropped_faces
-    
-    print("FAILED: No faces detected with any strategy")
+
+        cropped_face = extract_face_with_padding(img, x, y, w, h)
+
+        if validate_face_crop(cropped_face):
+            if config.VERBOSE_LOGGING:
+                print(f"SUCCESS: Using largest face (no eye requirement)")
+            return [cropped_face]
+
+    if config.VERBOSE_LOGGING:
+        print("FAILED: No faces detected with any strategy")
+
     return []
 
-def get_cropped_image_if_2_eyes(image_path, image_base64_data):
+
+def extract_face_with_padding(
+    img: np.ndarray,
+    x: int,
+    y: int,
+    w: int,
+    h: int
+) -> np.ndarray:
     """
-    Original strict method - kept for backward compatibility.
-    Only returns faces with 2+ detected eyes.
-    
+    Extract face region with padding.
+
     Args:
-        image_path (str): Path to image file (optional)
-        image_base64_data (str): Base64 encoded image data (optional)
-        
+        img: Source image
+        x, y, w, h: Face bounding box coordinates
+
     Returns:
-        list: List of cropped face images with 2+ eyes
+        Cropped face image with padding
     """
-    face_cascade = cv2.CascadeClassifier('./opencv/haarcascades/haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier('./opencv/haarcascades/haarcascade_eye.xml')
+    padding = int(config.FACE_PADDING_RATIO * min(w, h))
 
-    if image_path:
-        img = cv2.imread(image_path)
-    else:
-        img = get_cv2_image_from_base64_string(image_base64_data)
+    x_start = max(0, x - padding)
+    y_start = max(0, y - padding)
+    x_end = min(img.shape[1], x + w + padding)
+    y_end = min(img.shape[0], y + h + padding)
 
-    if img is None:
-        print("ERROR: Could not load image")
+    return img[y_start:y_end, x_start:x_end]
+
+
+def get_cropped_faces(
+    image_path: Optional[str] = None,
+    image_base64_data: Optional[str] = None
+) -> List[np.ndarray]:
+    """
+    Detect and crop faces from an image using flexible detection strategies.
+
+    Args:
+        image_path: Path to image file (optional)
+        image_base64_data: Base64 encoded image data (optional)
+
+    Returns:
+        List of cropped face images
+    """
+    # Load cascades
+    face_cascade = cv2.CascadeClassifier(config.FACE_CASCADE_PATH)
+    eye_cascade = cv2.CascadeClassifier(config.EYE_CASCADE_PATH)
+
+    # Validate cascades loaded successfully
+    if face_cascade.empty() or eye_cascade.empty():
+        print("ERROR: Failed to load cascade classifiers")
         return []
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    
-    cropped_faces = []
-    print(f"Original strict method: Found {len(faces)} faces")
-    
-    for (x, y, w, h) in faces:
-        roi_gray = gray[y:y+h, x:x+w]
-        roi_color = img[y:y+h, x:x+w]
-        eyes = eye_cascade.detectMultiScale(roi_gray)
-        print(f"  Face at ({x},{y},{w},{h}) has {len(eyes)} eyes")
-        if len(eyes) >= 2:
-            cropped_faces.append(roi_color)
-    
-    if cropped_faces:
-        print(f"SUCCESS: Found {len(cropped_faces)} faces with 2+ eyes")
+    # Load image
+    if image_path:
+        img = cv2.imread(image_path)
+    elif image_base64_data:
+        img = decode_base64_image(image_base64_data)
     else:
-        print("FAILED: No faces with 2+ eyes detected")
-    
-    return cropped_faces
+        print("ERROR: No image source provided")
+        return []
+
+    # Validate image
+    is_valid, error_msg = validate_image(img)
+    if not is_valid:
+        print(f"ERROR: {error_msg}")
+        return []
+
+    # Convert to grayscale for detection
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Detect faces with multiple strategies
+    return detect_faces_with_strategy(gray, face_cascade, eye_cascade, img)
+
+
+# ============================================================================
+# FEATURE EXTRACTION
+# ============================================================================
+
+def extract_features(face_img: np.ndarray) -> np.ndarray:
+    """
+    Extract combined features from a face image.
+
+    Combines raw pixel features with wavelet transform features for
+    enhanced accuracy.
+
+    Args:
+        face_img: Cropped face image
+
+    Returns:
+        Feature vector of shape (1, TOTAL_FEATURES)
+    """
+    # Resize to standard size
+    resized_raw = cv2.resize(face_img, config.IMAGE_SIZE)
+
+    # Apply wavelet transform
+    wavelet_img = w2d(face_img, config.WAVELET_MODE, config.WAVELET_LEVEL)
+    resized_wavelet = cv2.resize(wavelet_img, config.IMAGE_SIZE)
+
+    # Flatten features
+    raw_features = resized_raw.flatten()
+    wavelet_features = resized_wavelet.flatten()
+
+    # Concatenate features
+    combined_features = np.concatenate([raw_features, wavelet_features])
+
+    # Reshape to (1, n_features) for prediction
+    return combined_features.reshape(1, -1).astype(float)
+
+
+# ============================================================================
+# CLASSIFICATION
+# ============================================================================
+
+def classify_image(
+    image_base64_data: Optional[str] = None,
+    file_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Classify celebrity from image using flexible face detection.
+
+    Args:
+        image_base64_data: Base64 encoded image data
+        file_path: Optional file path for image
+
+    Returns:
+        List of classification results with probabilities
+    """
+    if __model is None:
+        raise RuntimeError("Model not loaded. Call load_saved_artifacts() first.")
+
+    # Detect and crop faces
+    cropped_faces = get_cropped_faces(file_path, image_base64_data)
+
+    if not cropped_faces:
+        return []
+
+    results = []
+
+    for idx, face_img in enumerate(cropped_faces):
+        try:
+            # Extract features
+            features = extract_features(face_img)
+
+            # Validate feature dimensions
+            if features.shape[1] != config.TOTAL_FEATURES:
+                print(f"ERROR: Feature dimension mismatch. Expected {config.TOTAL_FEATURES}, got {features.shape[1]}")
+                continue
+
+            # Make prediction
+            prediction = __model.predict(features)[0]
+            probabilities = __model.predict_proba(features)[0]
+
+            # Get celebrity name
+            celebrity_name = class_number_to_name(prediction)
+
+            # Convert probabilities to percentages
+            probabilities_pct = np.around(probabilities * 100, 2).tolist()
+
+            results.append({
+                'class': celebrity_name,
+                'class_probability': probabilities_pct,
+                'class_dictionary': __class_name_to_number,
+                'detection_info': {
+                    'method': 'flexible_detection',
+                    'face_number': idx + 1,
+                    'total_faces': len(cropped_faces)
+                }
+            })
+
+        except Exception as e:
+            print(f"Error processing face {idx + 1}: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+
+    return results
+
+
+def class_number_to_name(class_num: int) -> str:
+    """
+    Convert class number to celebrity name.
+
+    Args:
+        class_num: Class index
+
+    Returns:
+        Celebrity name
+    """
+    if class_num not in __class_number_to_name:
+        raise ValueError(f"Unknown class number: {class_num}")
+
+    return __class_number_to_name[class_num]
+
+
+# ============================================================================
+# MODEL LOADING
+# ============================================================================
+
+def load_saved_artifacts() -> None:
+    """
+    Load saved model and class dictionary from disk.
+
+    Raises:
+        FileNotFoundError: If model or class dictionary not found
+        RuntimeError: If loading fails
+    """
+    global __class_name_to_number, __class_number_to_name, __model
+
+    print("Loading saved artifacts...")
+
+    # Validate paths exist
+    if not os.path.exists(config.CLASS_DICT_PATH):
+        raise FileNotFoundError(f"Class dictionary not found at: {config.CLASS_DICT_PATH}")
+
+    if not os.path.exists(config.MODEL_PATH):
+        raise FileNotFoundError(f"Model not found at: {config.MODEL_PATH}")
+
+    # Load class dictionary
+    try:
+        with open(config.CLASS_DICT_PATH, "r") as f:
+            __class_name_to_number = json.load(f)
+            __class_number_to_name = {v: k for k, v in __class_name_to_number.items()}
+        print(f"✓ Class dictionary loaded from: {config.CLASS_DICT_PATH}")
+        print(f"  Classes: {list(__class_name_to_number.keys())}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load class dictionary: {e}")
+
+    # Load model
+    try:
+        with open(config.MODEL_PATH, 'rb') as f:
+            __model = joblib.load(f)
+        print(f"✓ Model loaded from: {config.MODEL_PATH}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load model: {e}")
+
+    print("Artifacts loaded successfully")
+
+
+# ============================================================================
+# TESTING
+# ============================================================================
 
 if __name__ == '__main__':
     load_saved_artifacts()
-
-    # Test with sample images
+    print("\nTesting classification (uncomment test images below):")
     # print(classify_image(None, "./test_images/ronaldo.jpeg"))
     # print(classify_image(None, "./test_images/messi.jpeg"))
-    # print(classify_image(None, "./test_images/curry.jpeg"))
-    # print(classify_image(None, "./test_images/serena.jpeg"))
-    # print(classify_image(None, "./test_images/alcaraz.jpeg"))
